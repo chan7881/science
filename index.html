@@ -36,18 +36,32 @@
     #massSlider {
       width: 120px;
     }
+    #buttonGroup {
+      display: flex;
+      gap: 10px;
+    }
     #canvasWrapper {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       width: 100%;
+      position: relative;
     }
     canvas {
       max-width: 100%;
       height: auto;
       background: #fff;
       border: 1px solid #ccc;
+    }
+    #velocityLabel {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.8);
+      padding: 5px 10px;
+      border-radius: 5px;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -57,20 +71,26 @@
       <label>질량: <span id="massLabel">10kg</span></label>
       <input type="range" id="massSlider" min="1" max="10" value="10">
     </div>
-    <button id="gravityBtn">중력 끄기</button>
+    <div id="buttonGroup">
+      <button id="resetBtn">초기화</button>
+      <button id="gravityBtn">중력 켜기</button>
+    </div>
   </div>
   <div id="canvasWrapper">
     <canvas id="simCanvas" width="600" height="400"></canvas>
+    <div id="velocityLabel">속도: 0.00</div>
   </div>
 
   <script>
     const canvas = document.getElementById("simCanvas");
     const ctx = canvas.getContext("2d");
     const gravityBtn = document.getElementById("gravityBtn");
+    const resetBtn = document.getElementById("resetBtn");
     const massSlider = document.getElementById("massSlider");
     const massLabel = document.getElementById("massLabel");
+    const velocityLabel = document.getElementById("velocityLabel");
 
-    let gravityEnabled = true;
+    let gravityEnabled = false;
 
     const ball = {
       x: canvas.width / 2,
@@ -83,6 +103,15 @@
       bounce: 0.7,
       color: "blue"
     };
+
+    function resetBall() {
+      ball.x = canvas.width / 2;
+      ball.y = 100;
+      ball.velocityX = 0;
+      ball.velocityY = 0;
+      gravityEnabled = false;
+      gravityBtn.textContent = "중력 켜기";
+    }
 
     let mouse = {
       isDragging: false,
@@ -155,6 +184,10 @@
       gravityBtn.textContent = gravityEnabled ? "중력 끄기" : "중력 켜기";
     });
 
+    resetBtn.addEventListener("click", () => {
+      resetBall();
+    });
+
     massSlider.addEventListener("input", () => {
       ball.mass = parseFloat(massSlider.value);
       massLabel.textContent = `${ball.mass}kg`;
@@ -179,6 +212,11 @@
         ctx.stroke();
         ctx.closePath();
       }
+    }
+
+    function updateVelocityDisplay() {
+      const speed = Math.sqrt(ball.velocityX ** 2 + ball.velocityY ** 2);
+      velocityLabel.textContent = `속도: ${speed.toFixed(2)}`;
     }
 
     function update() {
@@ -210,9 +248,11 @@
 
       drawBall();
       drawForceVector();
+      updateVelocityDisplay();
       requestAnimationFrame(update);
     }
 
+    resetBall();
     update();
   </script>
 </body>

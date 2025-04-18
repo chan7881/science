@@ -1,78 +1,37 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ko">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <title>물리 시뮬레이션</title>
   <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      overflow: hidden;
-      font-family: sans-serif;
-    }
-    #tabs {
-      display: flex;
-      justify-content: center;
-      background: #eee;
-      padding: 5px;
-    }
-    .tab {
-      padding: 10px 20px;
-      cursor: pointer;
-      border: 1px solid #ccc;
-      margin-right: 5px;
-    }
-    .active {
-      background: #ccc;
-    }
-    #container {
-      position: relative;
-      width: 100vw;
-      height: 100vh;
-    }
-    canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
-    }
+    html, body { margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; }
+    #tabs { display: flex; justify-content: center; background: #eee; padding: 5px; }
+    .tab { padding: 10px 20px; cursor: pointer; border: 1px solid #ccc; margin-right: 5px; }
+    .active { background: #ccc; }
+    #container { position: relative; width: 100vw; height: 100vh; }
+    canvas { position: absolute; top: 0; left: 0; }
     #ui {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background: rgba(255,255,255,0.8);
-      padding: 10px;
-      border-radius: 10px;
+      position: absolute; top: 10px; left: 10px;
+      display: flex; flex-direction: column; gap: 10px;
+      background: rgba(255,255,255,0.8); padding: 10px; border-radius: 10px;
     }
-    #graphControls {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-    }
-    label {
-      font-size: 14px;
-    }
+    #graphControls { display: flex; flex-direction: column; gap: 5px; }
+    label { font-size: 14px; }
   </style>
 </head>
 <body>
   <div id="tabs">
-    <div class="tab active" id="simTab">시뮬레이션</div>
-    <div class="tab" id="graphTab">그래프</div>
+    <div class="tab active" data-tab="sim">시뮬레이션</div>
+    <div class="tab" data-tab="graph">그래프</div>
   </div>
   <div id="container">
     <canvas id="simCanvas"></canvas>
     <canvas id="graphCanvas" style="display: none;"></canvas>
     <div id="ui">
-      <label>
-        <input type="checkbox" id="gravityCheckbox">
-        중력 온/오프
-      </label>
+      <label><input type="checkbox" id="gravityCheckbox"> 중력 온/오프</label>
       <button id="resetButton">초기화</button>
-      <label>
-        질량: <span id="massLabel">10</span> kg
+      <label>질량: <span id="massLabel">10</span> kg
         <input type="range" id="massSlider" min="1" max="10" value="10">
       </label>
       <div>속력: <span id="speedLabel">0</span> m/s</div>
@@ -84,259 +43,308 @@
       </div>
     </div>
   </div>
-
   <script>
-    const simCanvas = document.getElementById("simCanvas");
-    const graphCanvas = document.getElementById("graphCanvas");
-    const simCtx = simCanvas.getContext("2d");
-    const graphCtx = graphCanvas.getContext("2d");
-    const container = document.getElementById("container");
-
-    const gravityCheckbox = document.getElementById("gravityCheckbox");
-    const resetButton = document.getElementById("resetButton");
-    const massSlider = document.getElementById("massSlider");
-    const massLabel = document.getElementById("massLabel");
-    const speedLabel = document.getElementById("speedLabel");
-
-    const simTab = document.getElementById("simTab");
-    const graphTab = document.getElementById("graphTab");
-    const graphControls = document.getElementById("graphControls");
-    const absCheckbox = document.getElementById("absCheckbox");
-
-    let width, height;
-    function resizeCanvas() {
-      width = container.clientWidth;
-      height = container.clientHeight;
-      simCanvas.width = graphCanvas.width = width;
-      simCanvas.height = graphCanvas.height = height;
-    }
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
-
-    let ball = {
-      x: width / 2,
-      y: height / 2,
-      vx: 0,
-      vy: 0,
-      ax: 0,
-      ay: 0,
-      mass: 10,
-      radius: 30
+    const canvas = {
+      sim: document.getElementById("simCanvas"),
+      graph: document.getElementById("graphCanvas")
     };
-
-    const G = 9.81;
-    const forceScale = 0.05;
-
-    let dragStart = null;
-    let dragEnd = null;
-
-    function applyForce(fx, fy) {
-      ball.vx += fx / ball.mass;
-      ball.vy += fy / ball.mass;
-    }
-
-    function resetBall() {
-      ball.x = width / 2;
-      ball.y = height / 2;
-      ball.vx = 0;
-      ball.vy = 0;
-    }
-
-    function updateBallSize() {
-      ball.radius = 40 * (ball.mass / 10); // 10kg = 40px
-    }
-
-    massSlider.addEventListener("input", () => {
-      ball.mass = parseFloat(massSlider.value);
-      massLabel.textContent = ball.mass;
-      updateBallSize();
+    const ctx = {
+      sim: canvas.sim.getContext("2d"),
+      graph: canvas.graph.getContext("2d")
+    };
+    const controls = {
+      gravity: document.getElementById("gravityCheckbox"),
+      reset: document.getElementById("resetButton"),
+      massSlider: document.getElementById("massSlider"),
+      massLabel: document.getElementById("massLabel"),
+      speedLabel: document.getElementById("speedLabel"),
+      absCheckbox: document.getElementById("absCheckbox"),
+      graphControls: document.getElementById("graphControls")
+    };
+    const tabs = document.querySelectorAll(".tab");
+    const container = document.getElementById("container");
+    
+    const state = {
+      ball: { x: 0, y: 0, vx: 0, vy: 0, ax: 0, ay: 0, mass: 10, radius: 40 },
+      gravity: 9.81,
+      forceScale: 0.05,
+      dragStart: null,
+      dragEnd: null,
+      graphData: [],
+      lastTime: performance.now()
+    };
+    
+    let mouseX = null;
+    
+    canvas.graph.addEventListener("mousemove", e => {
+      const rect = canvas.graph.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
     });
-
-    resetButton.addEventListener("click", resetBall);
-
+    canvas.graph.addEventListener("mouseleave", () => mouseX = null);
+    
+    function resizeCanvas() {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      canvas.sim.width = canvas.graph.width = w;
+      canvas.sim.height = canvas.graph.height = h;
+    }
+    
+    function updateBallSize() {
+      state.ball.radius = 40 * (state.ball.mass / 10);
+    }
+    function resetBall() {
+      const { width, height } = canvas.sim;
+      Object.assign(state.ball, {
+        x: width / 2, y: height / 2, vx: 0, vy: 0
+      });
+    }
+    function applyForce(fx, fy) {
+      state.ball.vx += fx / state.ball.mass;
+      state.ball.vy += fy / state.ball.mass;
+    }
     function updatePhysics(dt) {
-      ball.ax = 0;
-      ball.ay = gravityCheckbox.checked ? G : 0;
-
-      ball.vx += ball.ax * dt;
-      ball.vy += ball.ay * dt;
-
-      ball.x += ball.vx * dt * 60;
-      ball.y += ball.vy * dt * 60;
-
-      if (ball.x - ball.radius < 0 || ball.x + ball.radius > width) {
-        ball.vx *= -1;
-        ball.x = Math.max(ball.radius, Math.min(width - ball.radius, ball.x));
+      const b = state.ball;
+      b.ax = 0;
+      b.ay = controls.gravity.checked ? state.gravity : 0;
+      b.vx += b.ax * dt;
+      b.vy += b.ay * dt;
+      b.x += b.vx * dt * 60;
+      b.y += b.vy * dt * 60;
+    
+      const r = b.radius, w = canvas.sim.width, h = canvas.sim.height;
+      if (b.x - r < 0 || b.x + r > w) {
+        b.vx *= -1;
+        b.x = Math.max(r, Math.min(w - r, b.x));
       }
-      if (ball.y - ball.radius < 0 || ball.y + ball.radius > height) {
-        ball.vy *= -1;
-        ball.y = Math.max(ball.radius, Math.min(height - ball.radius, ball.y));
+      if (b.y - r < 0 || b.y + r > h) {
+        b.vy *= -1;
+        b.y = Math.max(r, Math.min(h - r, b.y));
       }
-
-      const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
-      speedLabel.textContent = speed.toFixed(2);
+    
+      const speed = Math.sqrt(b.vx ** 2 + b.vy ** 2);
+      controls.speedLabel.textContent = speed.toFixed(2);
     }
-
     function drawBall() {
-      simCtx.clearRect(0, 0, width, height);
-      simCtx.beginPath();
-      simCtx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-      simCtx.fillStyle = "#3498db";
-      simCtx.fill();
-      simCtx.stroke();
-
-      if (dragStart && dragEnd) {
-        simCtx.beginPath();
-        simCtx.moveTo(dragStart.x, dragStart.y);
-        simCtx.lineTo(dragEnd.x, dragEnd.y);
-        simCtx.strokeStyle = "red";
-        simCtx.lineWidth = 2;
-        simCtx.stroke();
+      const ctxSim = ctx.sim;
+      const b = state.ball;
+      ctxSim.clearRect(0, 0, canvas.sim.width, canvas.sim.height);
+      ctxSim.beginPath();
+      ctxSim.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+      ctxSim.fillStyle = "#3498db";
+      ctxSim.fill();
+      ctxSim.stroke();
+    
+      if (state.dragStart && state.dragEnd) {
+        const dx = state.dragEnd.x - state.dragStart.x;
+        const dy = state.dragEnd.y - state.dragStart.y;
+        const fx = dx * state.forceScale;
+        const fy = dy * state.forceScale;
+        const magnitude = Math.sqrt(fx ** 2 + fy ** 2);
+        const label = `${magnitude.toFixed(2)} N`;
+    
+        ctxSim.beginPath();
+        ctxSim.moveTo(state.dragStart.x, state.dragStart.y);
+        ctxSim.lineTo(state.dragEnd.x, state.dragEnd.y);
+        ctxSim.strokeStyle = "red";
+        ctxSim.lineWidth = 2;
+        ctxSim.stroke();
+    
+        ctxSim.fillStyle = "black";
+        ctxSim.font = "14px sans-serif";
+        ctxSim.textAlign = "center";
+        ctxSim.fillText(label, state.dragEnd.x, state.dragEnd.y - 10);
       }
     }
-
-    function getPointerPos(e) {
-      if (e.touches) e = e.touches[0];
-      return { x: e.clientX, y: e.clientY };
-    }
-
-    function handlePointerDown(e) {
-      dragStart = getPointerPos(e);
-    }
-
-    function handlePointerMove(e) {
-      if (dragStart) dragEnd = getPointerPos(e);
-    }
-
-    function handlePointerUp(e) {
-      if (dragStart && dragEnd) {
-        const dx = dragEnd.x - dragStart.x;
-        const dy = dragEnd.y - dragStart.y;
-        applyForce(dx * forceScale, dy * forceScale);
-      }
-      dragStart = dragEnd = null;
-    }
-
-    simCanvas.addEventListener("mousedown", handlePointerDown);
-    simCanvas.addEventListener("mousemove", handlePointerMove);
-    simCanvas.addEventListener("mouseup", handlePointerUp);
-    simCanvas.addEventListener("touchstart", handlePointerDown);
-    simCanvas.addEventListener("touchmove", handlePointerMove);
-    simCanvas.addEventListener("touchend", handlePointerUp);
-
-    let graphData = [];
-    let lastTime = performance.now();
-
-    function updateGraphData(dt) {
+    function updateGraphData() {
       const now = performance.now() / 1000;
-      if (graphData.length === 0 || now - graphData[graphData.length - 1].t >= 0.05) {
-        graphData.push({
-          t: now,
-          x: ball.x,
-          y: ball.y,
-          vx: ball.vx,
-          vy: ball.vy,
-          ax: ball.ax,
-          ay: ball.ay
-        });
-        graphData = graphData.filter(d => now - d.t <= 10);
+      const b = state.ball;
+      if (state.graphData.length === 0 || now - state.graphData[state.graphData.length - 1].t >= 0.05) {
+        state.graphData.push({ t: now, x: b.x, y: b.y, vx: b.vx, vy: b.vy, ax: b.ax, ay: b.ay });
+        state.graphData = state.graphData.filter(d => now - d.t <= 10);
       }
     }
-
     function drawGraph() {
-      graphCtx.clearRect(0, 0, width, height);
-      const margin = 40;
-      const gWidth = width - margin * 2;
-      const gHeight = height - margin * 2;
-
+      const ctxG = ctx.graph;
+      ctxG.clearRect(0, 0, canvas.graph.width, canvas.graph.height);
+      const margin = 60;
+      const gW = canvas.graph.width - margin * 2;
+      const gH = canvas.graph.height - margin * 2;
+    
+      const t0 = state.graphData[0]?.t || 0;
+      const tVals = state.graphData.map(d => d.t - t0);
       const type = document.querySelector('input[name="graphType"]:checked').value;
-      const isAbs = absCheckbox.checked;
-
-      const t0 = graphData[0].t;
-      const tVals = graphData.map(d => d.t - t0);
+      const isAbs = controls.absCheckbox.checked;
+    
       let yVals;
-      if (type === "position") {
-        yVals = isAbs ? graphData.map(d => Math.hypot(d.x, d.y)) : {
-          x: graphData.map(d => d.x),
-          y: graphData.map(d => d.y)
-        };
-      } else if (type === "velocity") {
-        yVals = isAbs ? graphData.map(d => Math.hypot(d.vx, d.vy)) : {
-          x: graphData.map(d => d.vx),
-          y: graphData.map(d => d.vy)
-        };
-      } else if (type === "acceleration") {
-        yVals = isAbs ? graphData.map(d => Math.hypot(d.ax, d.ay)) : {
-          x: graphData.map(d => d.ax),
-          y: graphData.map(d => d.ay)
-        };
-      }
-
+      if (type === "position") yVals = isAbs ? state.graphData.map(d => Math.hypot(d.x, d.y)) : { x: state.graphData.map(d => d.x), y: state.graphData.map(d => d.y) };
+      else if (type === "velocity") yVals = isAbs ? state.graphData.map(d => Math.hypot(d.vx, d.vy)) : { x: state.graphData.map(d => d.vx), y: state.graphData.map(d => d.vy) };
+      else yVals = isAbs ? state.graphData.map(d => Math.hypot(d.ax, d.ay)) : { x: state.graphData.map(d => d.ax), y: state.graphData.map(d => d.ay) };
+    
       const allY = isAbs ? yVals : [...yVals.x, ...yVals.y];
-      const yMin = Math.min(...allY);
-      const yMax = Math.max(...allY);
-      const yRange = yMax - yMin || 1;
-
-      // 보조선
-      const steps = 5;
-      graphCtx.strokeStyle = "#ccc";
-      for (let i = 0; i <= steps; i++) {
-        const y = margin + gHeight - (i / steps) * gHeight;
-        graphCtx.beginPath();
-        graphCtx.moveTo(margin, y);
-        graphCtx.lineTo(width - margin, y);
-        graphCtx.stroke();
+      const yMin = Math.min(...allY), yMax = Math.max(...allY), yRange = yMax - yMin || 1;
+    
+      ctxG.strokeStyle = "#ccc";
+      ctxG.fillStyle = "#000";
+      ctxG.font = "12px sans-serif";
+    
+      ctxG.textAlign = "right";
+      ctxG.textBaseline = "middle";
+      for (let i = 0; i <= 5; i++) {
+        const y = margin + gH - (i / 5) * gH;
+        const val = (yMin + (i / 5) * yRange).toFixed(2);
+        ctxG.beginPath();
+        ctxG.moveTo(margin, y);
+        ctxG.lineTo(canvas.graph.width - margin, y);
+        ctxG.stroke();
+        ctxG.fillText(val, margin - 10, y);
       }
-
-      function drawLine(yData, color) {
-        graphCtx.beginPath();
-        graphCtx.strokeStyle = color;
-        yData.forEach((y, i) => {
-          const x = margin + (tVals[i] / 10) * gWidth;
-          const yPos = margin + gHeight - ((y - yMin) / yRange) * gHeight;
-          if (i === 0) graphCtx.moveTo(x, yPos);
-          else graphCtx.lineTo(x, yPos);
+    
+      ctxG.textAlign = "center";
+      ctxG.textBaseline = "top";
+      for (let i = 0; i <= 10; i++) {
+        const x = margin + (i / 10) * gW;
+        const val = (i).toFixed(1);
+        ctxG.fillText(val, x, canvas.graph.height - margin + 5);
+      }
+    
+      ctxG.save();
+      ctxG.font = "14px sans-serif";
+      ctxG.fillText("Time (s)", margin + gW / 2, canvas.graph.height - 15);
+      ctxG.translate(20, margin + gH / 2);
+      ctxG.rotate(-Math.PI / 2);
+      ctxG.fillText({
+        position: "Position",
+        velocity: "Velocity",
+        acceleration: "Acceleration"
+      }[type] + (isAbs ? " (abs)" : ""), 0, 0);
+      ctxG.restore();
+    
+      function drawLine(data, color) {
+        ctxG.beginPath();
+        ctxG.strokeStyle = color;
+        data.forEach((y, i) => {
+          const x = margin + (tVals[i] / 10) * gW;
+          const yPos = margin + gH - ((y - yMin) / yRange) * gH;
+          if (i === 0) ctxG.moveTo(x, yPos);
+          else ctxG.lineTo(x, yPos);
         });
-        graphCtx.stroke();
+        ctxG.stroke();
       }
-
+    
       if (isAbs) {
         drawLine(yVals, "black");
       } else {
         drawLine(yVals.x, "red");
         drawLine(yVals.y, "blue");
       }
+    
+      if (mouseX !== null) {
+        const time = ((mouseX - margin) / gW) * 10 + t0;
+        let closest = state.graphData.reduce((a, b) =>
+          Math.abs(a.t - time) < Math.abs(b.t - time) ? a : b
+        );
+    
+        if (closest) {
+          const xCanvas = margin + ((closest.t - t0) / 10) * gW;
+          let yValue;
+          if (type === "position") yValue = isAbs ? Math.hypot(closest.x, closest.y) : { x: closest.x, y: closest.y };
+          else if (type === "velocity") yValue = isAbs ? Math.hypot(closest.vx, closest.vy) : { x: closest.vx, y: closest.vy };
+          else yValue = isAbs ? Math.hypot(closest.ax, closest.ay) : { x: closest.ax, y: closest.ay };
+    
+          const drawPoint = (val, color) => {
+            const yCanvas = margin + gH - ((val - yMin) / yRange) * gH;
+            ctxG.beginPath();
+            ctxG.arc(xCanvas, yCanvas, 4, 0, Math.PI * 2);
+            ctxG.fillStyle = color;
+            ctxG.fill();
+            ctxG.strokeStyle = "#000";
+            ctxG.stroke();
+    
+            ctxG.fillStyle = "#000";
+            ctxG.font = "12px sans-serif";
+            ctxG.textAlign = "left";
+            ctxG.fillText(`${val.toFixed(2)}`, xCanvas + 8, yCanvas - 8);
+          };
+    
+          ctxG.beginPath();
+          ctxG.moveTo(xCanvas, margin);
+          ctxG.lineTo(xCanvas, margin + gH);
+          ctxG.strokeStyle = "rgba(0,0,0,0.2)";
+          ctxG.setLineDash([4, 2]);
+          ctxG.stroke();
+          ctxG.setLineDash([]);
+    
+          if (isAbs) drawPoint(yValue, "black");
+          else {
+            drawPoint(yValue.x, "red");
+            drawPoint(yValue.y, "blue");
+          }
+        }
+      }
     }
-
+    
     function animate(now) {
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
+      const dt = (now - state.lastTime) / 1000;
+      state.lastTime = now;
       updatePhysics(dt);
       drawBall();
-      updateGraphData(dt);
-      if (graphTab.classList.contains("active")) drawGraph();
+      updateGraphData();
+      if (document.querySelector('[data-tab="graph"]').classList.contains("active")) drawGraph();
       requestAnimationFrame(animate);
     }
-
-    simTab.addEventListener("click", () => {
-      simTab.classList.add("active");
-      graphTab.classList.remove("active");
-      simCanvas.style.display = "block";
-      graphCanvas.style.display = "none";
-      graphControls.style.display = "none";
+    
+    canvas.sim.addEventListener("mousedown", e => state.dragStart = { x: e.clientX, y: e.clientY });
+    canvas.sim.addEventListener("mousemove", e => { if (state.dragStart) state.dragEnd = { x: e.clientX, y: e.clientY }; });
+    canvas.sim.addEventListener("mouseup", () => {
+      if (state.dragStart && state.dragEnd) {
+        const dx = state.dragEnd.x - state.dragStart.x;
+        const dy = state.dragEnd.y - state.dragStart.y;
+        applyForce(dx * state.forceScale, dy * state.forceScale);
+      }
+      state.dragStart = state.dragEnd = null;
     });
-
-    graphTab.addEventListener("click", () => {
-      simTab.classList.remove("active");
-      graphTab.classList.add("active");
-      simCanvas.style.display = "none";
-      graphCanvas.style.display = "block";
-      graphControls.style.display = "flex";
+    canvas.sim.addEventListener("touchstart", e => {
+      const touch = e.touches[0];
+      state.dragStart = { x: touch.clientX, y: touch.clientY };
     });
-
+    canvas.sim.addEventListener("touchmove", e => {
+      const touch = e.touches[0];
+      if (state.dragStart) state.dragEnd = { x: touch.clientX, y: touch.clientY };
+    });
+    canvas.sim.addEventListener("touchend", e => {
+      const touch = e.changedTouches[0];
+      if (state.dragStart) {
+        state.dragEnd = state.dragEnd || { x: touch.clientX, y: touch.clientY };
+        const dx = state.dragEnd.x - state.dragStart.x;
+        const dy = state.dragEnd.y - state.dragStart.y;
+        applyForce(dx * state.forceScale, dy * state.forceScale);
+      }
+      state.dragStart = state.dragEnd = null;
+    });
+    
+    controls.massSlider.addEventListener("input", e => {
+      state.ball.mass = parseFloat(e.target.value);
+      controls.massLabel.textContent = state.ball.mass;
+      updateBallSize();
+    });
+    controls.reset.addEventListener("click", resetBall);
+    
+    tabs.forEach(tab => {
+      tab.addEventListener("click", () => {
+        tabs.forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        const isSim = tab.dataset.tab === "sim";
+        canvas.sim.style.display = isSim ? "block" : "none";
+        canvas.graph.style.display = isSim ? "none" : "block";
+        controls.graphControls.style.display = isSim ? "none" : "flex";
+      });
+    });
+    
+    resizeCanvas();
     updateBallSize();
     resetBall();
     requestAnimationFrame(animate);
-  </script>
-</body>
-</html>
+    </script>
+    </body>
+    </html>
+    

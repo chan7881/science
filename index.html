@@ -1,528 +1,342 @@
 <!DOCTYPE html>
- <html lang="ko">
- <html lang="en">
- <head>
-   <meta charset="UTF-8">
-   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-   <title>물리 시뮬레이션 - 중력, 질량, 마우스 드래그</title>
-   <meta charset="UTF-8" />
-   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-   <title>물리 시뮬레이션</title>
-   <style>
-     * {
-       box-sizing: border-box;
-     }
-     body {
-     html, body {
-       margin: 0;
-       padding: 0;
-       font-family: sans-serif;
-       display: flex;
-       flex-direction: column;
-       align-items: center;
-       justify-content: flex-start;
-       height: 100vh;
-       overflow: hidden;
-       background: #f5f5f5;
-       font-family: sans-serif;
-     }
-     #top-bar {
-       width: 100%;
-       padding: 10px;
-     #tabs {
-       display: flex;
-       justify-content: space-between;
-       align-items: center;
-       justify-content: center;
-       background: #eee;
-       padding: 5px;
-     }
-     #controls {
-       display: flex;
-       align-items: center;
-       gap: 10px;
-     }
-     #massSlider {
-       width: 120px;
-     .tab {
-       padding: 10px 20px;
-       cursor: pointer;
-       border: 1px solid #ccc;
-       margin-right: 5px;
-     }
-     #buttonGroup {
-       display: flex;
-       gap: 10px;
-     .active {
-       background: #ccc;
-     }
-     #canvasWrapper {
-       flex: 1;
-       display: flex;
-       align-items: center;
-       justify-content: center;
-       width: 100%;
-     #container {
-       position: relative;
-       width: 100vw;
-       height: 100vh;
-     }
-     canvas {
-       max-width: 100%;
-       height: auto;
-       background: #fff;
-       border: 1px solid #ccc;
-       position: absolute;
-       top: 0;
-       left: 0;
-     }
-     #velocityLabel {
-     #ui {
-       position: absolute;
-       bottom: 10px;
-       top: 10px;
-       left: 10px;
-       background: rgba(255, 255, 255, 0.8);
-       padding: 5px 10px;
-       border-radius: 5px;
-       display: flex;
-       flex-direction: column;
-       gap: 10px;
-       background: rgba(255,255,255,0.8);
-       padding: 10px;
-       border-radius: 10px;
-     }
-     #graphControls {
-       display: flex;
-       flex-direction: column;
-       gap: 5px;
-     }
-     label {
-       font-size: 14px;
-     }
-   </style>
- </head>
- <body>
-   <div id="top-bar">
-     <div id="controls">
-       <label>질량: <span id="massLabel">10kg</span></label>
-       <input type="range" id="massSlider" min="1" max="10" value="10">
-     </div>
-     <div id="buttonGroup">
-       <button id="resetBtn">초기화</button>
-       <button id="gravityBtn">중력 켜기</button>
-     </div>
-   <div id="tabs">
-     <div class="tab active" id="simTab">시뮬레이션</div>
-     <div class="tab" id="graphTab">그래프</div>
-   </div>
-   <div id="canvasWrapper">
-     <canvas id="simCanvas" width="600" height="400"></canvas>
-     <div id="velocityLabel">속도: 0.00</div>
-   <div id="container">
-     <canvas id="simCanvas"></canvas>
-     <canvas id="graphCanvas" style="display: none;"></canvas>
-     <div id="ui">
-       <label>
-         <input type="checkbox" id="gravityCheckbox">
-         중력 온/오프
-       </label>
-       <button id="resetButton">초기화</button>
-       <label>
-         질량: <span id="massLabel">10</span> kg
-         <input type="range" id="massSlider" min="1" max="10" value="10">
-       </label>
-       <div>속력: <span id="speedLabel">0</span> m/s</div>
-       <div id="graphControls" style="display: none;">
-         <label><input type="radio" name="graphType" value="position" checked> 이동거리</label>
-         <label><input type="radio" name="graphType" value="velocity"> 속력</label>
-         <label><input type="radio" name="graphType" value="acceleration"> 가속도</label>
-         <label><input type="checkbox" id="absCheckbox"> 절대값 보기</label>
-       </div>
-     </div>
-   </div>
- 
-   <script>
-     const canvas = document.getElementById("simCanvas");
-     const ctx = canvas.getContext("2d");
-     const gravityBtn = document.getElementById("gravityBtn");
-     const resetBtn = document.getElementById("resetBtn");
-     const simCanvas = document.getElementById("simCanvas");
-     const graphCanvas = document.getElementById("graphCanvas");
-     const simCtx = simCanvas.getContext("2d");
-     const graphCtx = graphCanvas.getContext("2d");
-     const container = document.getElementById("container");
- 
-     const gravityCheckbox = document.getElementById("gravityCheckbox");
-     const resetButton = document.getElementById("resetButton");
-     const massSlider = document.getElementById("massSlider");
-     const massLabel = document.getElementById("massLabel");
-     const velocityLabel = document.getElementById("velocityLabel");
-     const speedLabel = document.getElementById("speedLabel");
- 
-     let gravityEnabled = false;
-     const simTab = document.getElementById("simTab");
-     const graphTab = document.getElementById("graphTab");
-     const graphControls = document.getElementById("graphControls");
-     const absCheckbox = document.getElementById("absCheckbox");
- 
-     const ball = {
-       x: canvas.width / 2,
-       y: 100,
-       radius: 40, // 10kg 기준
-     let width, height;
-     function resizeCanvas() {
-       width = container.clientWidth;
-       height = container.clientHeight;
-       simCanvas.width = graphCanvas.width = width;
-       simCanvas.height = graphCanvas.height = height;
-     }
-     window.addEventListener("resize", resizeCanvas);
-     resizeCanvas();
- 
-     let ball = {
-       x: width / 2,
-       y: height / 2,
-       vx: 0,
-       vy: 0,
-       ax: 0,
-       ay: 0,
-       mass: 10,
-       velocityX: 0,
-       velocityY: 0,
-       gravity: 0.5,
-       bounce: 0.7,
-       color: "blue"
-       radius: 30
-     };
- 
-     function resetBall() {
-       ball.x = canvas.width / 2;
-       ball.y = 100;
-       ball.velocityX = 0;
-       ball.velocityY = 0;
-       gravityEnabled = false;
-       gravityBtn.textContent = "중력 켜기";
-     }
-     const G = 9.81;
-     const forceScale = 0.05;
- 
-     let mouse = {
-       isDragging: false,
-       startX: 0,
-       startY: 0,
-       endX: 0,
-       endY: 0
-     };
-     let dragStart = null;
-     let dragEnd = null;
- 
-     function getCanvasCoords(e) {
-       const rect = canvas.getBoundingClientRect();
-       let clientX = e.clientX;
-       let clientY = e.clientY;
-       if (e.touches) {
-         clientX = e.touches[0].clientX;
-         clientY = e.touches[0].clientY;
-       }
-       return {
-         x: clientX - rect.left,
-         y: clientY - rect.top
-       };
-     function applyForce(fx, fy) {
-       ball.vx += fx / ball.mass;
-       ball.vy += fy / ball.mass;
-     }
- 
-     function isInsideBall(x, y) {
-       const dist = Math.hypot(x - ball.x, y - ball.y);
-       return dist <= ball.radius;
-     function resetBall() {
-       ball.x = width / 2;
-       ball.y = height / 2;
-       ball.vx = 0;
-       ball.vy = 0;
-     }
- 
-     function onStart(e) {
-       const { x, y } = getCanvasCoords(e);
-       if (isInsideBall(x, y)) {
-         mouse.isDragging = true;
-         mouse.startX = x;
-         mouse.startY = y;
-         mouse.endX = x;
-         mouse.endY = y;
-       }
-     function updateBallSize() {
-       ball.radius = 40 * (ball.mass / 10); // 10kg = 40px
-     }
- 
-     function onMove(e) {
-       if (mouse.isDragging) {
-         const { x, y } = getCanvasCoords(e);
-         mouse.endX = x;
-         mouse.endY = y;
-     massSlider.addEventListener("input", () => {
-       ball.mass = parseFloat(massSlider.value);
-       massLabel.textContent = ball.mass;
-       updateBallSize();
-     });
- 
-     resetButton.addEventListener("click", resetBall);
- 
-     function updatePhysics(dt) {
-       ball.ax = 0;
-       ball.ay = gravityCheckbox.checked ? G : 0;
- 
-       ball.vx += ball.ax * dt;
-       ball.vy += ball.ay * dt;
- 
-       ball.x += ball.vx * dt * 60;
-       ball.y += ball.vy * dt * 60;
- 
-       if (ball.x - ball.radius < 0 || ball.x + ball.radius > width) {
-         ball.vx *= -1;
-         ball.x = Math.max(ball.radius, Math.min(width - ball.radius, ball.x));
-       }
-       if (ball.y - ball.radius < 0 || ball.y + ball.radius > height) {
-         ball.vy *= -1;
-         ball.y = Math.max(ball.radius, Math.min(height - ball.radius, ball.y));
-       }
- 
-       const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
-       speedLabel.textContent = speed.toFixed(2);
-     }
- 
-     function onEnd(e) {
-       if (mouse.isDragging) {
-         const dx = mouse.startX - mouse.endX;
-         const dy = mouse.startY - mouse.endY;
-         const forceX = dx * 0.2;
-         const forceY = dy * 0.2;
-         ball.velocityX += forceX / ball.mass;
-         ball.velocityY += forceY / ball.mass;
-         mouse.isDragging = false;
-     function drawBall() {
-       simCtx.clearRect(0, 0, width, height);
-       simCtx.beginPath();
-       simCtx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-       simCtx.fillStyle = "#3498db";
-       simCtx.fill();
-       simCtx.stroke();
- 
-       if (dragStart && dragEnd) {
-         simCtx.beginPath();
-         simCtx.moveTo(dragStart.x, dragStart.y);
-         simCtx.lineTo(dragEnd.x, dragEnd.y);
-         simCtx.strokeStyle = "red";
-         simCtx.lineWidth = 2;
-         simCtx.stroke();
-       }
-     }
- 
-     canvas.addEventListener("mousedown", onStart);
-     canvas.addEventListener("mousemove", onMove);
-     canvas.addEventListener("mouseup", onEnd);
-     function getPointerPos(e) {
-       if (e.touches) e = e.touches[0];
-       return { x: e.clientX, y: e.clientY };
-     }
- 
-     canvas.addEventListener("touchstart", onStart);
-     canvas.addEventListener("touchmove", onMove);
-     canvas.addEventListener("touchend", onEnd);
-     function handlePointerDown(e) {
-       dragStart = getPointerPos(e);
-     }
- 
-     gravityBtn.addEventListener("click", () => {
-       gravityEnabled = !gravityEnabled;
-       gravityBtn.textContent = gravityEnabled ? "중력 끄기" : "중력 켜기";
-     });
-     function handlePointerMove(e) {
-       if (dragStart) dragEnd = getPointerPos(e);
-     }
- 
-     resetBtn.addEventListener("click", () => {
-       resetBall();
-     });
-     function handlePointerUp(e) {
-       if (dragStart && dragEnd) {
-         const dx = dragEnd.x - dragStart.x;
-         const dy = dragEnd.y - dragStart.y;
-         applyForce(dx * forceScale, dy * forceScale);
-       }
-       dragStart = dragEnd = null;
-     }
- 
-     massSlider.addEventListener("input", () => {
-       ball.mass = parseFloat(massSlider.value);
-       massLabel.textContent = `${ball.mass}kg`;
-       ball.radius = 40 * (ball.mass / 10); // 10kg 기준 40px
-     });
-     simCanvas.addEventListener("mousedown", handlePointerDown);
-     simCanvas.addEventListener("mousemove", handlePointerMove);
-     simCanvas.addEventListener("mouseup", handlePointerUp);
-     simCanvas.addEventListener("touchstart", handlePointerDown);
-     simCanvas.addEventListener("touchmove", handlePointerMove);
-     simCanvas.addEventListener("touchend", handlePointerUp);
- 
-     function drawBall() {
-       ctx.beginPath();
-       ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
-       ctx.fillStyle = ball.color;
-       ctx.fill();
-       ctx.closePath();
-     }
-     let graphData = [];
-     let lastTime = performance.now();
- 
-     function drawForceVector() {
-       if (mouse.isDragging) {
-         ctx.beginPath();
-         ctx.moveTo(mouse.startX, mouse.startY);
-         ctx.lineTo(mouse.endX, mouse.endY);
-         ctx.strokeStyle = "red";
-         ctx.lineWidth = 2;
-         ctx.stroke();
-         ctx.closePath();
-     function updateGraphData(dt) {
-       const now = performance.now() / 1000;
-       if (graphData.length === 0 || now - graphData[graphData.length - 1].t >= 0.05) {
-         graphData.push({
-           t: now,
-           x: ball.x,
-           y: ball.y,
-           vx: ball.vx,
-           vy: ball.vy,
-           ax: ball.ax,
-           ay: ball.ay
-         });
-         graphData = graphData.filter(d => now - d.t <= 10);
-       }
-     }
- 
-     function updateVelocityDisplay() {
-       const speed = Math.sqrt(ball.velocityX ** 2 + ball.velocityY ** 2);
-       velocityLabel.textContent = `속도: ${speed.toFixed(2)}`;
-     }
-     function drawGraph() {
-       graphCtx.clearRect(0, 0, width, height);
-       const margin = 40;
-       const gWidth = width - margin * 2;
-       const gHeight = height - margin * 2;
- 
-     function update() {
-       ctx.clearRect(0, 0, canvas.width, canvas.height);
-       const type = document.querySelector('input[name="graphType"]:checked').value;
-       const isAbs = absCheckbox.checked;
- 
-       if (gravityEnabled) {
-         ball.velocityY += ball.gravity;
-       const t0 = graphData[0].t;
-       const tVals = graphData.map(d => d.t - t0);
-       let yVals;
-       if (type === "position") {
-         yVals = isAbs ? graphData.map(d => Math.hypot(d.x, d.y)) : {
-           x: graphData.map(d => d.x),
-           y: graphData.map(d => d.y)
-         };
-       } else if (type === "velocity") {
-         yVals = isAbs ? graphData.map(d => Math.hypot(d.vx, d.vy)) : {
-           x: graphData.map(d => d.vx),
-           y: graphData.map(d => d.vy)
-         };
-       } else if (type === "acceleration") {
-         yVals = isAbs ? graphData.map(d => Math.hypot(d.ax, d.ay)) : {
-           x: graphData.map(d => d.ax),
-           y: graphData.map(d => d.ay)
-         };
-       }
- 
-       ball.x += ball.velocityX;
-       ball.y += ball.velocityY;
-       const allY = isAbs ? yVals : [...yVals.x, ...yVals.y];
-       const yMin = Math.min(...allY);
-       const yMax = Math.max(...allY);
-       const yRange = yMax - yMin || 1;
- 
-       // 보조선
-       const steps = 5;
-       graphCtx.strokeStyle = "#ccc";
-       for (let i = 0; i <= steps; i++) {
-         const y = margin + gHeight - (i / steps) * gHeight;
-         graphCtx.beginPath();
-         graphCtx.moveTo(margin, y);
-         graphCtx.lineTo(width - margin, y);
-         graphCtx.stroke();
-       }
- 
-       // 벽 충돌
-       if (ball.x - ball.radius < 0) {
-         ball.x = ball.radius;
-         ball.velocityX *= -ball.bounce;
-       } else if (ball.x + ball.radius > canvas.width) {
-         ball.x = canvas.width - ball.radius;
-         ball.velocityX *= -ball.bounce;
-       function drawLine(yData, color) {
-         graphCtx.beginPath();
-         graphCtx.strokeStyle = color;
-         yData.forEach((y, i) => {
-           const x = margin + (tVals[i] / 10) * gWidth;
-           const yPos = margin + gHeight - ((y - yMin) / yRange) * gHeight;
-           if (i === 0) graphCtx.moveTo(x, yPos);
-           else graphCtx.lineTo(x, yPos);
-         });
-         graphCtx.stroke();
-       }
- 
-       if (ball.y - ball.radius < 0) {
-         ball.y = ball.radius;
-         ball.velocityY *= -ball.bounce;
-       } else if (ball.y + ball.radius > canvas.height) {
-         ball.y = canvas.height - ball.radius;
-         ball.velocityY *= -ball.bounce;
-       if (isAbs) {
-         drawLine(yVals, "black");
-       } else {
-         drawLine(yVals.x, "red");
-         drawLine(yVals.y, "blue");
-       }
-     }
- 
-     function animate(now) {
-       const dt = (now - lastTime) / 1000;
-       lastTime = now;
-       updatePhysics(dt);
-       drawBall();
-       drawForceVector();
-       updateVelocityDisplay();
-       requestAnimationFrame(update);
-       updateGraphData(dt);
-       if (graphTab.classList.contains("active")) drawGraph();
-       requestAnimationFrame(animate);
-     }
- 
-     simTab.addEventListener("click", () => {
-       simTab.classList.add("active");
-       graphTab.classList.remove("active");
-       simCanvas.style.display = "block";
-       graphCanvas.style.display = "none";
-       graphControls.style.display = "none";
-     });
- 
-     graphTab.addEventListener("click", () => {
-       simTab.classList.remove("active");
-       graphTab.classList.add("active");
-       simCanvas.style.display = "none";
-       graphCanvas.style.display = "block";
-       graphControls.style.display = "flex";
-     });
- 
-     updateBallSize();
-     resetBall();
-     update();
-     requestAnimationFrame(animate);
-   </script>
- </body>
- </html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>물리 시뮬레이션</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      font-family: sans-serif;
+    }
+    #tabs {
+      display: flex;
+      justify-content: center;
+      background: #eee;
+      padding: 5px;
+    }
+    .tab {
+      padding: 10px 20px;
+      cursor: pointer;
+      border: 1px solid #ccc;
+      margin-right: 5px;
+    }
+    .active {
+      background: #ccc;
+    }
+    #container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: rgba(255,255,255,0.8);
+      padding: 10px;
+      border-radius: 10px;
+    }
+    #graphControls {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    label {
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div id="tabs">
+    <div class="tab active" id="simTab">시뮬레이션</div>
+    <div class="tab" id="graphTab">그래프</div>
+  </div>
+  <div id="container">
+    <canvas id="simCanvas"></canvas>
+    <canvas id="graphCanvas" style="display: none;"></canvas>
+    <div id="ui">
+      <label>
+        <input type="checkbox" id="gravityCheckbox">
+        중력 온/오프
+      </label>
+      <button id="resetButton">초기화</button>
+      <label>
+        질량: <span id="massLabel">10</span> kg
+        <input type="range" id="massSlider" min="1" max="10" value="10">
+      </label>
+      <div>속력: <span id="speedLabel">0</span> m/s</div>
+      <div id="graphControls" style="display: none;">
+        <label><input type="radio" name="graphType" value="position" checked> 이동거리</label>
+        <label><input type="radio" name="graphType" value="velocity"> 속력</label>
+        <label><input type="radio" name="graphType" value="acceleration"> 가속도</label>
+        <label><input type="checkbox" id="absCheckbox"> 절대값 보기</label>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const simCanvas = document.getElementById("simCanvas");
+    const graphCanvas = document.getElementById("graphCanvas");
+    const simCtx = simCanvas.getContext("2d");
+    const graphCtx = graphCanvas.getContext("2d");
+    const container = document.getElementById("container");
+
+    const gravityCheckbox = document.getElementById("gravityCheckbox");
+    const resetButton = document.getElementById("resetButton");
+    const massSlider = document.getElementById("massSlider");
+    const massLabel = document.getElementById("massLabel");
+    const speedLabel = document.getElementById("speedLabel");
+
+    const simTab = document.getElementById("simTab");
+    const graphTab = document.getElementById("graphTab");
+    const graphControls = document.getElementById("graphControls");
+    const absCheckbox = document.getElementById("absCheckbox");
+
+    let width, height;
+    function resizeCanvas() {
+      width = container.clientWidth;
+      height = container.clientHeight;
+      simCanvas.width = graphCanvas.width = width;
+      simCanvas.height = graphCanvas.height = height;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    let ball = {
+      x: width / 2,
+      y: height / 2,
+      vx: 0,
+      vy: 0,
+      ax: 0,
+      ay: 0,
+      mass: 10,
+      radius: 30
+    };
+
+    const G = 9.81;
+    const forceScale = 0.05;
+
+    let dragStart = null;
+    let dragEnd = null;
+
+    function applyForce(fx, fy) {
+      ball.vx += fx / ball.mass;
+      ball.vy += fy / ball.mass;
+    }
+
+    function resetBall() {
+      ball.x = width / 2;
+      ball.y = height / 2;
+      ball.vx = 0;
+      ball.vy = 0;
+    }
+
+    function updateBallSize() {
+      ball.radius = 40 * (ball.mass / 10); // 10kg = 40px
+    }
+
+    massSlider.addEventListener("input", () => {
+      ball.mass = parseFloat(massSlider.value);
+      massLabel.textContent = ball.mass;
+      updateBallSize();
+    });
+
+    resetButton.addEventListener("click", resetBall);
+
+    function updatePhysics(dt) {
+      ball.ax = 0;
+      ball.ay = gravityCheckbox.checked ? G : 0;
+
+      ball.vx += ball.ax * dt;
+      ball.vy += ball.ay * dt;
+
+      ball.x += ball.vx * dt * 60;
+      ball.y += ball.vy * dt * 60;
+
+      if (ball.x - ball.radius < 0 || ball.x + ball.radius > width) {
+        ball.vx *= -1;
+        ball.x = Math.max(ball.radius, Math.min(width - ball.radius, ball.x));
+      }
+      if (ball.y - ball.radius < 0 || ball.y + ball.radius > height) {
+        ball.vy *= -1;
+        ball.y = Math.max(ball.radius, Math.min(height - ball.radius, ball.y));
+      }
+
+      const speed = Math.sqrt(ball.vx ** 2 + ball.vy ** 2);
+      speedLabel.textContent = speed.toFixed(2);
+    }
+
+    function drawBall() {
+      simCtx.clearRect(0, 0, width, height);
+      simCtx.beginPath();
+      simCtx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+      simCtx.fillStyle = "#3498db";
+      simCtx.fill();
+      simCtx.stroke();
+
+      if (dragStart && dragEnd) {
+        simCtx.beginPath();
+        simCtx.moveTo(dragStart.x, dragStart.y);
+        simCtx.lineTo(dragEnd.x, dragEnd.y);
+        simCtx.strokeStyle = "red";
+        simCtx.lineWidth = 2;
+        simCtx.stroke();
+      }
+    }
+
+    function getPointerPos(e) {
+      if (e.touches) e = e.touches[0];
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    function handlePointerDown(e) {
+      dragStart = getPointerPos(e);
+    }
+
+    function handlePointerMove(e) {
+      if (dragStart) dragEnd = getPointerPos(e);
+    }
+
+    function handlePointerUp(e) {
+      if (dragStart && dragEnd) {
+        const dx = dragEnd.x - dragStart.x;
+        const dy = dragEnd.y - dragStart.y;
+        applyForce(dx * forceScale, dy * forceScale);
+      }
+      dragStart = dragEnd = null;
+    }
+
+    simCanvas.addEventListener("mousedown", handlePointerDown);
+    simCanvas.addEventListener("mousemove", handlePointerMove);
+    simCanvas.addEventListener("mouseup", handlePointerUp);
+    simCanvas.addEventListener("touchstart", handlePointerDown);
+    simCanvas.addEventListener("touchmove", handlePointerMove);
+    simCanvas.addEventListener("touchend", handlePointerUp);
+
+    let graphData = [];
+    let lastTime = performance.now();
+
+    function updateGraphData(dt) {
+      const now = performance.now() / 1000;
+      if (graphData.length === 0 || now - graphData[graphData.length - 1].t >= 0.05) {
+        graphData.push({
+          t: now,
+          x: ball.x,
+          y: ball.y,
+          vx: ball.vx,
+          vy: ball.vy,
+          ax: ball.ax,
+          ay: ball.ay
+        });
+        graphData = graphData.filter(d => now - d.t <= 10);
+      }
+    }
+
+    function drawGraph() {
+      graphCtx.clearRect(0, 0, width, height);
+      const margin = 40;
+      const gWidth = width - margin * 2;
+      const gHeight = height - margin * 2;
+
+      const type = document.querySelector('input[name="graphType"]:checked').value;
+      const isAbs = absCheckbox.checked;
+
+      const t0 = graphData[0].t;
+      const tVals = graphData.map(d => d.t - t0);
+      let yVals;
+      if (type === "position") {
+        yVals = isAbs ? graphData.map(d => Math.hypot(d.x, d.y)) : {
+          x: graphData.map(d => d.x),
+          y: graphData.map(d => d.y)
+        };
+      } else if (type === "velocity") {
+        yVals = isAbs ? graphData.map(d => Math.hypot(d.vx, d.vy)) : {
+          x: graphData.map(d => d.vx),
+          y: graphData.map(d => d.vy)
+        };
+      } else if (type === "acceleration") {
+        yVals = isAbs ? graphData.map(d => Math.hypot(d.ax, d.ay)) : {
+          x: graphData.map(d => d.ax),
+          y: graphData.map(d => d.ay)
+        };
+      }
+
+      const allY = isAbs ? yVals : [...yVals.x, ...yVals.y];
+      const yMin = Math.min(...allY);
+      const yMax = Math.max(...allY);
+      const yRange = yMax - yMin || 1;
+
+      // 보조선
+      const steps = 5;
+      graphCtx.strokeStyle = "#ccc";
+      for (let i = 0; i <= steps; i++) {
+        const y = margin + gHeight - (i / steps) * gHeight;
+        graphCtx.beginPath();
+        graphCtx.moveTo(margin, y);
+        graphCtx.lineTo(width - margin, y);
+        graphCtx.stroke();
+      }
+
+      function drawLine(yData, color) {
+        graphCtx.beginPath();
+        graphCtx.strokeStyle = color;
+        yData.forEach((y, i) => {
+          const x = margin + (tVals[i] / 10) * gWidth;
+          const yPos = margin + gHeight - ((y - yMin) / yRange) * gHeight;
+          if (i === 0) graphCtx.moveTo(x, yPos);
+          else graphCtx.lineTo(x, yPos);
+        });
+        graphCtx.stroke();
+      }
+
+      if (isAbs) {
+        drawLine(yVals, "black");
+      } else {
+        drawLine(yVals.x, "red");
+        drawLine(yVals.y, "blue");
+      }
+    }
+
+    function animate(now) {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      updatePhysics(dt);
+      drawBall();
+      updateGraphData(dt);
+      if (graphTab.classList.contains("active")) drawGraph();
+      requestAnimationFrame(animate);
+    }
+
+    simTab.addEventListener("click", () => {
+      simTab.classList.add("active");
+      graphTab.classList.remove("active");
+      simCanvas.style.display = "block";
+      graphCanvas.style.display = "none";
+      graphControls.style.display = "none";
+    });
+
+    graphTab.addEventListener("click", () => {
+      simTab.classList.remove("active");
+      graphTab.classList.add("active");
+      simCanvas.style.display = "none";
+      graphCanvas.style.display = "block";
+      graphControls.style.display = "flex";
+    });
+
+    updateBallSize();
+    resetBall();
+    requestAnimationFrame(animate);
+  </script>
+</body>
+</html>
